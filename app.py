@@ -5,12 +5,12 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from pyquotex.stable_api import Quotex
 
-# ---------- بيانات الحساب ----------
+# ---------- بيانات الحساب (ضع بياناتك هنا) ----------
 def credentials():
     return "weboka1465@skateru.com", "weboka1465@"
 
 # ---------- إعداد اللوج ----------
-logging.basicConfig(level=logging.DEBUG,  # خليه DEBUG بدل INFO
+logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("PyQuotexAPI")
 
@@ -21,30 +21,35 @@ class NoExit:
         raise RuntimeError("تم منع sys.exit")
 sys.exit = NoExit().exit
 
+# ---------- إعدادات البروكسي ----------
+# إذا ما بدك بروكسي خليه None
+# أمثلة:
+# proxy = "http://user:pass@host:port"
+# proxy = "socks5://user:pass@host:port"
+proxy = None
+
 # ---------- دورة حياة التطبيق ----------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("🚀 بدء التشغيل...")
     email, password = credentials()
-    logger.debug(f"📧 محاولة تسجيل الدخول بـ Email={email}, Password={len(password)*'*'}")
-
     app.state.client = Quotex(email=email, password=password, lang="pt")
+
+    # تعيين User-Agent يشبه متصفح حقيقي
     app.state.client.user_agent = (
-        "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:109.0) "
-        "Gecko/20100101 Firefox/119.0"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.6367.91 Safari/537.36"
     )
 
-    # جرب تعطيل SSL (ممكن Render يمنع بعض الشهادات)
-    try:
-        app.state.client.ssl = False
-    except Exception:
-        logger.warning("⚠️ تعذر تعطيل SSL، سيتم الاستمرار بالوضع العادي")
+    # تعيين البروكسي إذا موجود
+    if proxy:
+        app.state.client.proxies = {"https": proxy, "http": proxy}
+        logger.info(f"🌐 تم تفعيل البروكسي: {proxy}")
 
     try:
-        logger.debug("🔌 محاولة الاتصال بالسيرفر...")
+        logger.debug("📧 محاولة تسجيل الدخول...")
         check, reason = await app.state.client.connect()
-        logger.debug(f"📡 نتيجة الاتصال: check={check}, reason={reason}")
-
         if check:
             logger.info(f"✅ تسجيل الدخول ناجح: {reason}")
             app.state.login_status = True
@@ -52,7 +57,7 @@ async def lifespan(app: FastAPI):
             logger.error(f"❌ فشل تسجيل الدخول: {reason}")
             app.state.login_status = False
     except Exception as e:
-        logger.exception("❌ خطأ أثناء الاتصال")  # يعطي Trace كامل
+        logger.error(f"❌ خطأ أثناء الاتصال: {e}")
         app.state.login_status = False
 
     yield
@@ -70,7 +75,6 @@ def root():
 
 @app.get("/login-status")
 def login_status():
-    """Endpoint يرجع إذا الدخول ناجح أو لا"""
     return {"logged_in": getattr(app.state, "login_status", False)}
 
 @app.get("/balance")
@@ -80,7 +84,6 @@ async def get_balance():
         balance = await app.state.client.get_balance()
         return {"balance": round(balance, 2)}
     except Exception as e:
-        logger.exception("❌ خطأ عند جلب الرصيد")
         return {"error": str(e)}
 
 @app.get("/profile")
@@ -94,5 +97,4 @@ async def get_profile():
             "country": profile.country_name
         }
     except Exception as e:
-        logger.exception("❌ خطأ عند جلب البروفايل")
         return {"error": str(e)}
