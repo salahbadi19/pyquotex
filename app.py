@@ -5,12 +5,12 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from pyquotex.stable_api import Quotex
 
-# ---------- بيانات الحساب (ضع بياناتك هنا) ----------
+# ---------- بيانات الحساب ----------
 def credentials():
     return "weboka1465@skateru.com", "weboka1465@"
 
 # ---------- إعداد اللوج ----------
-logging.basicConfig(level=logging.INFO,
+logging.basicConfig(level=logging.DEBUG,  # خليه DEBUG بدل INFO
                     format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("PyQuotexAPI")
 
@@ -26,14 +26,25 @@ sys.exit = NoExit().exit
 async def lifespan(app: FastAPI):
     logger.info("🚀 بدء التشغيل...")
     email, password = credentials()
+    logger.debug(f"📧 محاولة تسجيل الدخول بـ Email={email}, Password={len(password)*'*'}")
+
     app.state.client = Quotex(email=email, password=password, lang="pt")
     app.state.client.user_agent = (
         "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:109.0) "
         "Gecko/20100101 Firefox/119.0"
     )
 
+    # جرب تعطيل SSL (ممكن Render يمنع بعض الشهادات)
     try:
+        app.state.client.ssl = False
+    except Exception:
+        logger.warning("⚠️ تعذر تعطيل SSL، سيتم الاستمرار بالوضع العادي")
+
+    try:
+        logger.debug("🔌 محاولة الاتصال بالسيرفر...")
         check, reason = await app.state.client.connect()
+        logger.debug(f"📡 نتيجة الاتصال: check={check}, reason={reason}")
+
         if check:
             logger.info(f"✅ تسجيل الدخول ناجح: {reason}")
             app.state.login_status = True
@@ -41,7 +52,7 @@ async def lifespan(app: FastAPI):
             logger.error(f"❌ فشل تسجيل الدخول: {reason}")
             app.state.login_status = False
     except Exception as e:
-        logger.error(f"❌ خطأ أثناء الاتصال: {e}")
+        logger.exception("❌ خطأ أثناء الاتصال")  # يعطي Trace كامل
         app.state.login_status = False
 
     yield
@@ -69,6 +80,7 @@ async def get_balance():
         balance = await app.state.client.get_balance()
         return {"balance": round(balance, 2)}
     except Exception as e:
+        logger.exception("❌ خطأ عند جلب الرصيد")
         return {"error": str(e)}
 
 @app.get("/profile")
@@ -82,4 +94,5 @@ async def get_profile():
             "country": profile.country_name
         }
     except Exception as e:
+        logger.exception("❌ خطأ عند جلب البروفايل")
         return {"error": str(e)}
