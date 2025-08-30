@@ -1,63 +1,66 @@
-import os
-import asyncio
 import logging
+import sys
+import asyncio
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from pyquotex.stable_api import Quotex
-from pyquotex.config import credentials as orig_credentials
 
-# --- استخدم بياناتك مباشرة بدل الطلب اليدوي ---
+# ---------- بيانات الحساب (ضع بياناتك هنا) ----------
 def credentials():
     return "weboka1465@skateru.com", "weboka1465@"
 
-# --- التسجيل ---
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+# ---------- إعداد اللوج ----------
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("PyQuotexAPI")
 
-# --- تعديل مؤقت على المكتبة لمنع الخروج المفاجئ ---
-import sys
-from types import ModuleType
-
-# نحتال قليلًا: نعطل sys.exit
+# منع الإغلاق المفاجئ
 class NoExit:
     def exit(self, code=0):
         logger.warning(f"تم منع الإغلاق: sys.exit({code})")
         raise RuntimeError("تم منع sys.exit")
-
 sys.exit = NoExit().exit
 
-# --- إدارة الدورة الحياتية ---
+# ---------- دورة حياة التطبيق ----------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("🚀 بدء التشغيل...")
-    email, password = credentials()  # نفس الطريقة الأصلية
+    email, password = credentials()
     app.state.client = Quotex(email=email, password=password, lang="pt")
-    app.state.client.user_agent = "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/119.0"
+    app.state.client.user_agent = (
+        "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:109.0) "
+        "Gecko/20100101 Firefox/119.0"
+    )
 
     try:
         check, reason = await app.state.client.connect()
         if check:
-            logger.info(f"✅ تم الاتصال: {reason}")
+            logger.info(f"✅ تسجيل الدخول ناجح: {reason}")
+            app.state.login_status = True
         else:
-            logger.error(f"❌ فشل الاتصال: {reason}")
-    except SystemExit:
-        logger.error("❌ تم منع الخروج بسبب فشل تسجيل الدخول")
+            logger.error(f"❌ فشل تسجيل الدخول: {reason}")
+            app.state.login_status = False
     except Exception as e:
-        logger.error(f"❌ خطأ في الاتصال: {e}")
+        logger.error(f"❌ خطأ أثناء الاتصال: {e}")
+        app.state.login_status = False
 
     yield
 
     if hasattr(app.state, 'client') and app.state.client:
         await app.state.client.close()
-        logger.info("👋 تم الإغلاق")
+        logger.info("👋 تم تسجيل الخروج")
 
-# --- التطبيق ---
+# ---------- تطبيق FastAPI ----------
 app = FastAPI(lifespan=lifespan)
 
-# --- Endpoints ---
 @app.get("/")
 def root():
-    return {"status": "running", "api": "PyQuotex API", "version": "1.0", "author": "Cleiton"}
+    return {"status": "running", "api": "PyQuotex API", "version": "1.0"}
+
+@app.get("/login-status")
+def login_status():
+    """Endpoint يرجع إذا الدخول ناجح أو لا"""
+    return {"logged_in": getattr(app.state, "login_status", False)}
 
 @app.get("/balance")
 async def get_balance():
@@ -78,20 +81,5 @@ async def get_profile():
             "live_balance": round(profile.live_balance, 2),
             "country": profile.country_name
         }
-    except Exception as e:
-        return {"error": str(e)}
-
-@app.get("/assets")
-async def get_assets():
-    try:
-        assets = app.state.client.get_all_asset_name()
-        result = []
-        for asset in assets:
-            symbol = asset[0]
-            name = asset[1]
-            _, data = await app.state.client.check_asset_open(symbol)
-            is_open = data[2] if data and len(data) > 2 else False
-            result.append({"symbol": symbol, "name": name, "is_open": is_open})
-        return {"assets": result}
     except Exception as e:
         return {"error": str(e)}
