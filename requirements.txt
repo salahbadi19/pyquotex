@@ -9,3 +9,5 @@ soupsieve==2.7
 typing_extensions==4.14.1
 urllib3==2.5.0
 websocket-client==1.8.0
+fastapi==0.115.5
+uvicorn==0.30.6
