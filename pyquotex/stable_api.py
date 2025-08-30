@@ -276,8 +276,6 @@ class Quotex:
             if self.api.account_type > 0 else self.api.account_balance.get("liveBalance")
         return float(f"{truncate(balance + self.get_profit(), 2):.2f}")
 
-    # Agregar al archivo stable_api.py dentro de la clase Quotex
-
     async def calculate_indicator(
             self, asset: str,
             indicator: str,
@@ -285,31 +283,11 @@ class Quotex:
             history_size: int = 3600,
             timeframe: int = 60
     ) -> dict:
-        """
-        Calcula indicadores técnicos para un activo dado
-
-        Args:
-            asset (str): Nombre del activo (ej: "EURUSD")
-            indicator (str): Nombre del indicador
-            params (dict): Parámetros específicos del indicador
-            history_size (int): Tamaño del histórico en segundos
-            timeframe (int): Temporalidad en segundos. Valores posibles:
-                - 60: 1 minuto
-                - 300: 5 minutos
-                - 900: 15 minutos
-                - 1800: 30 minutos
-                - 3600: 1 hora
-                - 7200: 2 horas
-                - 14400: 4 horas
-                - 86400: 1 día
-        """
-        # Validar timeframe
         valid_timeframes = [60, 300, 900, 1800, 3600, 7200, 14400, 86400]
         if timeframe not in valid_timeframes:
             return {"error": f"Timeframe no válido. Valores permitidos: {valid_timeframes}"}
 
-        # Ajustar history_size para asegurar suficientes velas según el timeframe
-        adjusted_history = max(history_size, timeframe * 50)  # Asegurar al menos 50 velas
+        adjusted_history = max(history_size, timeframe * 50)
 
         candles = await self.get_candles(asset, time.time(), adjusted_history, timeframe)
 
@@ -325,7 +303,6 @@ class Quotex:
         indicator = indicator.upper()
 
         try:
-            # RSI
             if indicator == "RSI":
                 period = params.get("period", 14)
                 values = indicators.calculate_rsi(prices, period)
@@ -337,7 +314,6 @@ class Quotex:
                     "timestamps": timestamps[-len(values):] if values else []
                 }
 
-            # MACD
             elif indicator == "MACD":
                 fast_period = params.get("fast_period", 12)
                 slow_period = params.get("slow_period", 26)
@@ -347,7 +323,6 @@ class Quotex:
                 macd_data["timestamps"] = timestamps[-len(macd_data["macd"]):] if macd_data["macd"] else []
                 return macd_data
 
-            # SMA
             elif indicator == "SMA":
                 period = params.get("period", 20)
                 values = indicators.calculate_sma(prices, period)
@@ -359,7 +334,6 @@ class Quotex:
                     "timestamps": timestamps[-len(values):] if values else []
                 }
 
-            # EMA
             elif indicator == "EMA":
                 period = params.get("period", 20)
                 values = indicators.calculate_ema(prices, period)
@@ -371,7 +345,6 @@ class Quotex:
                     "timestamps": timestamps[-len(values):] if values else []
                 }
 
-            # BOLLINGER
             elif indicator == "BOLLINGER":
                 period = params.get("period", 20)
                 num_std = params.get("std", 2)
@@ -380,7 +353,6 @@ class Quotex:
                 bb_data["timestamps"] = timestamps[-len(bb_data["middle"]):] if bb_data["middle"] else []
                 return bb_data
 
-            # STOCHASTIC
             elif indicator == "STOCHASTIC":
                 k_period = params.get("k_period", 14)
                 d_period = params.get("d_period", 3)
@@ -389,7 +361,6 @@ class Quotex:
                 stoch_data["timestamps"] = timestamps[-len(stoch_data["k"]):] if stoch_data["k"] else []
                 return stoch_data
 
-            # ATR
             elif indicator == "ATR":
                 period = params.get("period", 14)
                 values = indicators.calculate_atr(highs, lows, prices, period)
@@ -401,7 +372,6 @@ class Quotex:
                     "timestamps": timestamps[-len(values):] if values else []
                 }
 
-            # ADX
             elif indicator == "ADX":
                 period = params.get("period", 14)
                 adx_data = indicators.calculate_adx(highs, lows, prices, period)
@@ -409,7 +379,6 @@ class Quotex:
                 adx_data["timestamps"] = timestamps[-len(adx_data["adx"]):] if adx_data["adx"] else []
                 return adx_data
 
-            # ICHIMOKU
             elif indicator == "ICHIMOKU":
                 tenkan_period = params.get("tenkan_period", 9)
                 kijun_period = params.get("kijun_period", 26)
@@ -433,43 +402,27 @@ class Quotex:
             callback=None,
             timeframe: int = 60
     ):
-        """
-        Suscribe a actualizaciones en tiempo real de un indicador
-
-        Args:
-            asset (str): Nombre del activo
-            indicator (str): Nombre del indicador
-            params (dict): Parámetros del indicador
-            callback (callable): Función que se llamará con cada actualización
-            timeframe (int): Temporalidad en segundos
-        """
         if not callback:
             raise ValueError("Debe proporcionar una función callback")
 
-        # Validar timeframe
         valid_timeframes = [60, 300, 900, 1800, 3600, 7200, 14400, 86400]
         if timeframe not in valid_timeframes:
             raise ValueError(f"Timeframe no válido. Valores permitidos: {valid_timeframes}")
 
         try:
-            # Iniciar stream de velas
             self.start_candles_stream(asset, timeframe)
 
             while True:
                 try:
-                    # Obtener velas en tiempo real
                     real_time_candles = await self.get_realtime_candles(asset, timeframe)
 
                     if real_time_candles:
-                        # Convertir el diccionario a lista ordenada por tiempo
                         candles_list = sorted(real_time_candles.items(), key=lambda x: x[0])
 
-                        # Extraer datos de las velas
                         prices = [float(candle[1]["close"]) for candle in candles_list]
                         highs = [float(candle[1]["high"]) for candle in candles_list]
                         lows = [float(candle[1]["low"]) for candle in candles_list]
 
-                        # Asegurar que tenemos suficientes datos
                         min_periods = {
                             "RSI": 14,
                             "MACD": 26,
@@ -484,15 +437,13 @@ class Quotex:
 
                         required_periods = min_periods.get(indicator.upper(), 14)
                         if len(prices) < required_periods:
-                            # Si no hay suficientes datos, obtener histórico
                             historical_candles = await self.get_candles(
                                 asset,
                                 time.time(),
-                                timeframe * required_periods * 2,  # Doble del período requerido
+                                timeframe * required_periods * 2,
                                 timeframe
                             )
                             if historical_candles:
-                                # Combinar datos históricos con tiempo real
                                 prices = [float(candle["close"]) for candle in historical_candles] + prices
                                 highs = [float(candle["high"]) for candle in historical_candles] + highs
                                 lows = [float(candle["low"]) for candle in historical_candles] + lows
@@ -500,7 +451,6 @@ class Quotex:
                         indicators = TechnicalIndicators()
                         indicator = indicator.upper()
 
-                        # Calcular el indicador con los datos actualizados
                         result = {
                             "time": candles_list[-1][0],
                             "timeframe": timeframe,
@@ -523,7 +473,6 @@ class Quotex:
                             result["all_values"] = macd_data
                             result["indicator"] = "MACD"
 
-                        # BOLLINGER
                         elif indicator == "BOLLINGER":
                             period = params.get("period", 20)
                             num_std = params.get("std", 2)
@@ -531,7 +480,6 @@ class Quotex:
                             result["value"] = bb_data["current"]
                             result["all_values"] = bb_data
 
-                        # STOCHASTIC
                         elif indicator == "STOCHASTIC":
                             k_period = params.get("k_period", 14)
                             d_period = params.get("d_period", 3)
@@ -539,21 +487,18 @@ class Quotex:
                             result["value"] = stoch_data["current"]
                             result["all_values"] = stoch_data
 
-                        # ADX
                         elif indicator == "ADX":
                             period = params.get("period", 14)
                             adx_data = indicators.calculate_adx(highs, lows, prices, period)
                             result["value"] = adx_data["current"]
                             result["all_values"] = adx_data
 
-                        # ATR
                         elif indicator == "ATR":
                             period = params.get("period", 14)
                             values = indicators.calculate_atr(highs, lows, prices, period)
                             result["value"] = values[-1] if values else None
                             result["all_values"] = values
 
-                        # ICHIMOKU
                         elif indicator == "ICHIMOKU":
                             tenkan_period = params.get("tenkan_period", 9)
                             kijun_period = params.get("kijun_period", 26)
@@ -566,18 +511,15 @@ class Quotex:
                         else:
                             result["error"] = f"Indicador '{indicator}' no soportado para tiempo real"
 
-                        # Llamar al callback con el resultado
                         await callback(result)
 
-                    await asyncio.sleep(1)  # Esperar 1 segundo entre actualizaciones
-
+                    await asyncio.sleep(1)
                 except Exception as e:
                     print(f"Error en la suscripción: {str(e)}")
                     await asyncio.sleep(1)
         except Exception as e:
             logger.error(f"Error en la suscripción: {str(e)}")
         finally:
-            # Limpiar suscripciones al salir
             try:
                 self.stop_candles_stream(asset)
             except:
@@ -593,29 +535,10 @@ class Quotex:
         return self.api.timesync.server_timestamp
 
     async def get_history(self):
-        """Get the trader's history based on account type.
-
-        Returns:
-            The trading history from the API.
-        """
         account_type = "demo" if self.account_is_demo else "live"
         return await self.api.get_trader_history(account_type, page_number=1)
 
     async def buy(self, amount: float, asset: str, direction: str, duration: int, time_mode: str = "TIME"):
-        """
-        Buy Binary option
-
-        Args:
-            amount (float): Amount to buy.
-            asset (str): Asset to buy.
-            direction (str): Direction to buy.
-            duration (int): Duration to buy.
-            time_mode (str): Time mode to buy.
-
-        Returns:
-            The buy result.
-
-        """
         self.api.buy_id = None
         request_id = expiration.get_timestamp()
         is_fast_option = time_mode.upper() == "TIME"
@@ -664,7 +587,6 @@ class Quotex:
         return status_buy, self.api.pending_successful
 
     async def sell_option(self, options_ids):
-        """Sell asset Quotex"""
         self.api.sell_option(options_ids)
         self.api.sold_options_respond = None
         while self.api.sold_options_respond is None:
@@ -672,7 +594,6 @@ class Quotex:
         return self.api.sold_options_respond
 
     def get_payment(self):
-        """Payment Quotex server"""
         assets_data = {}
         for i in self.api.instruments:
             assets_data[i[2].replace("\n", "")] = {
@@ -687,9 +608,7 @@ class Quotex:
 
         return assets_data
 
-    # Function suggested by https://t.me/Suppor_Mk in the message on telegram https://t.me/c/2215782682/1/2990
     def get_payout_by_asset(self, asset_name: str, timeframe: str = "1"):
-        """Payout Quotex server"""
         assets_data = {}
         for i in self.api.instruments:
             if asset_name == i[1]:
@@ -721,7 +640,6 @@ class Quotex:
             await asyncio.sleep(1)
 
     async def check_win(self, id_number: int):
-        """Check win based id"""
         task = asyncio.create_task(
             self.start_remaing_time()
         )
@@ -735,12 +653,6 @@ class Quotex:
         return data_dict["win"]
 
     def start_candles_stream(self, asset: str = "EURUSD", period: int = 0):
-        """Start streaming candle data for a specified asset.
-
-        Args:
-            asset (str): The asset to stream data for.
-            period (int, optional): The period for the candles. Defaults to 0.
-        """
         self.api.current_asset = asset
         self.api.subscribe_realtime_candle(asset, period)
         self.api.chart_notification(asset)
@@ -755,31 +667,6 @@ class Quotex:
             percent_mode: bool = False,
             percent_deal: int = 1
     ):
-        """
-        Applies trading settings for a specific asset and retrieves the updated investment settings.
-
-        This function sets up trading parameters for the specified asset, including the period,
-        deal amount, and percentage mode if applicable. It then waits for the updated investment
-        settings to be available and returns them.
-
-        Args:
-            asset (str): The asset for which to apply the settings.
-            period (int, optional): The trading period in seconds. Defaults to 0.
-            time_mode (bool, optional): Whether to switch time mode. Defaults to False.
-            deal (float, optional): The fixed amount for each deal. Defaults to 5.
-            percent_mode (bool, optional): Whether to enable percentage-based deals. Defaults to False.
-            percent_deal (float, optional): The percentage value for percentage-based deals. Defaults to 1.
-
-        Returns:
-            dict: The updated investment settings for the specified asset.
-
-        Raises:
-            ValueError: If the investment settings cannot be retrieved after multiple attempts.
-
-        Notes:
-            - This function continuously refreshes the settings until they are available.
-            - A sleep interval is used to prevent excessive API calls.
-        """
         is_fast_option = False if time_mode.upper() == "TIMER" else True
         self.api.current_asset = asset
         self.api.settings_apply(
@@ -810,15 +697,12 @@ class Quotex:
     async def opening_closing_current_candle(self, asset: str, period: int = 0):
         candles_data = {}
         candles_tick = await self.get_realtime_candles(asset)
-        print(candles_tick)
         aggregate = aggregate_candle(candles_tick, candles_data)
-        print(aggregate)
         candles_dict = list(aggregate.values())[0]
         candles_dict['opening'] = candles_dict.pop('timestamp')
         candles_dict['closing'] = candles_dict['opening'] + period
         candles_dict['remaining'] = candles_dict['closing'] - int(time.time())
         return candles_dict
-
 
     async def start_realtime_price(self, asset: str, period: int = 0):
         self.start_candles_stream(asset, period)
@@ -838,21 +722,12 @@ class Quotex:
         self.start_candles_stream(asset, period)
         data = {}
         while True:
-            print("Tá agarrado....")
             if self.api.realtime_candles.get(asset):
                 tick = self.api.realtime_candles
                 return process_tick(tick, period, data)
             await asyncio.sleep(0.2)
 
     async def get_realtime_candles(self, asset: str):
-        """Retrieve real-time candle data for a specified asset.
-
-        Args:
-            asset (str): The asset to get candle data for.
-
-        Returns:
-            dict: A dictionary of real-time candle data.
-        """
         return self.api.realtime_candles.get(asset, {})
 
     async def get_realtime_sentiment(self, asset: str):
@@ -868,14 +743,6 @@ class Quotex:
         return self.api.profit_in_operation or 0
 
     async def get_result(self, operation_id: str):
-        """Check if the trade is a win based on its ID.
-
-        Args:
-            operation_id (str): The ID of the trade to check.
-        Returns:
-            str: win if the trade is a win, loss otherwise.
-            float: The profit from operations; returns 0 if no profit is recorded.
-        """
         data_history = await self.get_history()
         for item in data_history:
             if item.get("ticket") == operation_id:
@@ -892,8 +759,7 @@ class Quotex:
         self.api.candle_generated_check[str(asset)][int(size)] = {}
         while True:
             if time.time() - start > 20:
-                logger.error(
-                    '**error** start_candles_one_stream late for 20 sec')
+                logger.error('**error** start_candles_one_stream late for 20 sec')
                 return False
             try:
                 if self.api.candle_generated_check[str(asset)][int(size)]:
@@ -924,8 +790,7 @@ class Quotex:
             try:
                 self.api.subscribe_all_size(self.codes_asset[asset])
             except:
-                logger.error(
-                    '**error** start_candles_all_size_stream reconnect')
+                logger.error('**error** start_candles_all_size_stream reconnect')
                 await self.connect()
             await asyncio.sleep(0.2)
 
